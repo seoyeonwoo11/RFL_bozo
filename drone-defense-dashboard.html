@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drone Defense Control</title>
+  <style>
+    :root {
+      --bg: #030706;
+      --panel: rgba(7, 18, 16, 0.92);
+      --panel-2: #0a1513;
+      --line: #1d3f37;
+      --text: #d7e6e0;
+      --muted: #6d8b82;
+      --green: #29f293;
+      --yellow: #ffd83d;
+      --red: #ff3f49;
+      --cyan: #63e6d2;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI", "Noto Sans KR", Arial, sans-serif;
+      background:
+        linear-gradient(rgba(25, 82, 68, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(25, 82, 68, 0.06) 1px, transparent 1px),
+        radial-gradient(circle at 50% 0%, #10211d 0%, var(--bg) 46%);
+      background-size: 34px 34px, 34px 34px, auto;
+      overflow-x: hidden;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.018) 0,
+        rgba(255, 255, 255, 0.018) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 34px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 4px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--green);
+      font-family: Consolas, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.24em;
+    }
+
+    h1 {
+      margin: 0;
+      color: #effff9;
+      font-size: clamp(1.45rem, 3vw, 2.3rem);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font: 0.75rem Consolas, monospace;
+      letter-spacing: 0.12em;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+      animation: softPulse 1.7s infinite;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .stat {
+      position: relative;
+      overflow: hidden;
+      min-height: 96px;
+      padding: 16px 20px;
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(13, 29, 25, 0.96), rgba(4, 12, 10, 0.94));
+    }
+
+    .stat::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 44px;
+      border-top: 2px solid currentColor;
+    }
+
+    .stat-label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font: 0.7rem Consolas, monospace;
+      letter-spacing: 0.18em;
+    }
+
+    .stat-value {
+      font: 700 2.2rem Consolas, monospace;
+      line-height: 1;
+    }
+
+    .stat.alive {
+      color: var(--green);
+    }
+
+    .stat.warning {
+      color: var(--yellow);
+    }
+
+    .stat.destroyed {
+      color: var(--red);
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2.1fr) minmax(290px, 0.9fr);
+      gap: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: 0 18px 55px rgba(0, 0, 0, 0.35);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 48px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(18, 43, 36, 0.42);
+    }
+
+    .panel-title {
+      color: #b9d2ca;
+      font: 0.74rem Consolas, monospace;
+      letter-spacing: 0.16em;
+    }
+
+    .coordinates {
+      color: #55746b;
+      font: 0.66rem Consolas, monospace;
+    }
+
+    .drone-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .drone-card {
+      position: relative;
+      min-height: 154px;
+      padding: 14px;
+      border: 1px solid #245344;
+      color: var(--green);
+      background:
+        linear-gradient(135deg, rgba(21, 56, 45, 0.46), rgba(4, 13, 11, 0.9)),
+        var(--panel-2);
+      cursor: pointer;
+      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .drone-card:hover,
+    .drone-card.selected {
+      transform: translateY(-2px);
+      border-color: currentColor;
+      box-shadow: 0 0 0 1px currentColor, 0 0 24px rgba(41, 242, 147, 0.13);
+    }
+
+    .drone-card::before,
+    .drone-card::after {
+      content: "";
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      pointer-events: none;
+    }
+
+    .drone-card::before {
+      top: 5px;
+      left: 5px;
+      border-top: 1px solid currentColor;
+      border-left: 1px solid currentColor;
+    }
+
+    .drone-card::after {
+      right: 5px;
+      bottom: 5px;
+      border-right: 1px solid currentColor;
+      border-bottom: 1px solid currentColor;
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drone-id {
+      color: #dceae5;
+      font: 700 0.76rem Consolas, monospace;
+      letter-spacing: 0.08em;
+    }
+
+    .state-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .drone-icon {
+      position: relative;
+      width: 86px;
+      height: 54px;
+      margin: 18px auto 11px;
+      opacity: 0.9;
+    }
+
+    .drone-icon .body {
+      position: absolute;
+      top: 23px;
+      left: 32px;
+      width: 22px;
+      height: 11px;
+      border: 2px solid currentColor;
+      border-radius: 45% 45% 60% 60%;
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .drone-icon .arm {
+      position: absolute;
+      top: 26px;
+      left: 15px;
+      width: 56px;
+      height: 2px;
+      background: currentColor;
+    }
+
+    .drone-icon .arm:nth-child(2) {
+      transform: rotate(24deg);
+    }
+
+    .drone-icon .arm:nth-child(3) {
+      transform: rotate(-24deg);
+    }
+
+    .rotor {
+      position: absolute;
+      width: 23px;
+      height: 7px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+    }
+
+    .r1 { top: 11px; left: 2px; }
+    .r2 { top: 11px; right: 2px; }
+    .r3 { bottom: 4px; left: 2px; }
+    .r4 { right: 2px; bottom: 4px; }
+
+    .drone-state {
+      text-align: center;
+      font: 700 0.73rem Consolas, monospace;
+      letter-spacing: 0.18em;
+    }
+
+    .drone-card.warning {
+      color: var(--yellow);
+      border-color: #7d6d20;
+      animation: warningFlash 1.05s infinite;
+    }
+
+    .drone-card.destroyed {
+      color: var(--red);
+      border-color: var(--red);
+      background:
+        linear-gradient(135deg, rgba(100, 17, 22, 0.52), rgba(24, 4, 5, 0.95)),
+        var(--panel-2);
+      box-shadow: inset 0 0 35px rgba(255, 63, 73, 0.12);
+    }
+
+    .drone-card.destroyed .drone-icon {
+      opacity: 0.45;
+      transform: rotate(-8deg);
+      filter: drop-shadow(0 0 7px var(--red));
+    }
+
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .target-content {
+      padding: 20px;
+    }
+
+    .selected-meta {
+      margin-bottom: 18px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .selected-kicker {
+      margin-bottom: 5px;
+      color: var(--muted);
+      font: 0.68rem Consolas, monospace;
+      letter-spacing: 0.16em;
+    }
+
+    .selected-name {
+      color: #f1fff9;
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .traffic-wrap {
+      display: flex;
+      align-items: center;
+      gap: 25px;
+      padding: 4px 2px 22px;
+    }
+
+    .traffic-light {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 13px;
+      border: 1px solid #34514a;
+      border-radius: 8px;
+      background: #050908;
+      box-shadow: inset 0 0 18px #000;
+    }
+
+    .light {
+      width: 44px;
+      height: 44px;
+      border: 2px solid #26322f;
+      border-radius: 50%;
+      background: #111816;
+      box-shadow: inset 0 0 13px #000;
+      opacity: 0.35;
+    }
+
+    .light.active.red {
+      border-color: var(--red);
+      background: var(--red);
+      box-shadow: 0 0 20px var(--red), inset 0 0 10px #ffb0b4;
+      opacity: 1;
+    }
+
+    .light.active.yellow {
+      border-color: var(--yellow);
+      background: var(--yellow);
+      box-shadow: 0 0 20px var(--yellow), inset 0 0 10px #fff4ad;
+      opacity: 1;
+      animation: softPulse 0.75s infinite;
+    }
+
+    .light.active.green {
+      border-color: var(--green);
+      background: var(--green);
+      box-shadow: 0 0 20px var(--green), inset 0 0 10px #b9ffdc;
+      opacity: 1;
+    }
+
+    .signal-info strong {
+      display: block;
+      margin-bottom: 6px;
+      font: 700 1.2rem Consolas, monospace;
+    }
+
+    .signal-info span {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .controls {
+      display: block;
+      gap: 10px;
+    }
+
+    .controls .fire-btn {
+      display: none;
+    }
+
+    .controls .reset-btn {
+      width: 100%;
+    }
+
+    .fire-btn,
+    .reset-btn {
+      min-height: 53px;
+      border: 1px solid;
+      font-family: Consolas, monospace;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      cursor: pointer;
+      transition: filter 150ms ease, transform 150ms ease;
+    }
+
+    .fire-btn {
+      border-color: var(--red);
+      color: #fff;
+      background: linear-gradient(#e3313b, #8b141b);
+      box-shadow: 0 0 18px rgba(255, 63, 73, 0.22);
+    }
+
+    .reset-btn {
+      padding: 0 17px;
+      border-color: #416058;
+      color: #9db6af;
+      background: #0c1714;
+    }
+
+    .fire-btn:hover,
+    .reset-btn:hover {
+      filter: brightness(1.18);
+      transform: translateY(-1px);
+    }
+
+    .fire-btn:disabled {
+      border-color: #563438;
+      color: #8e7779;
+      background: #281416;
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      margin: 16px 1px 7px;
+      color: var(--muted);
+      font: 0.65rem Consolas, monospace;
+    }
+
+    .progress-track {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+    }
+
+    .progress-step {
+      height: 5px;
+      background: #1b2d29;
+    }
+
+    .progress-step.done {
+      background: var(--red);
+      box-shadow: 0 0 8px rgba(255, 63, 73, 0.65);
+    }
+
+    .log {
+      flex: 1;
+      min-height: 150px;
+      max-height: 205px;
+      margin-top: 18px;
+      padding: 13px;
+      overflow-y: auto;
+      border: 1px solid #182e28;
+      background: rgba(0, 0, 0, 0.32);
+      color: #76968d;
+      font: 0.66rem/1.7 Consolas, monospace;
+    }
+
+    .log-entry::before {
+      content: "> ";
+      color: var(--green);
+    }
+
+    .log-entry.alert {
+      color: #ff7f86;
+    }
+
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 20;
+      display: grid;
+      gap: 9px;
+      width: min(360px, calc(100% - 40px));
+    }
+
+    .toast {
+      padding: 14px 16px;
+      border: 1px solid var(--red);
+      color: #fff;
+      background: rgba(91, 10, 15, 0.96);
+      box-shadow: 0 0 25px rgba(255, 63, 73, 0.32);
+      font: 700 0.85rem Consolas, monospace;
+      letter-spacing: 0.04em;
+      animation: toastIn 240ms ease-out, toastOut 300ms ease-in 2.7s forwards;
+    }
+
+    @keyframes warningFlash {
+      0%, 100% { box-shadow: inset 0 0 25px rgba(255, 216, 61, 0.03); }
+      50% { box-shadow: inset 0 0 34px rgba(255, 216, 61, 0.25), 0 0 16px rgba(255, 216, 61, 0.18); }
+    }
+
+    @keyframes softPulse {
+      50% { opacity: 0.52; }
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(30px); }
+    }
+
+    @keyframes toastOut {
+      to { opacity: 0; transform: translateX(30px); }
+    }
+
+    @media (max-width: 850px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 570px) {
+      .app {
+        width: min(100% - 20px, 1220px);
+        padding-top: 18px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .stats {
+        gap: 7px;
+      }
+
+      .stat {
+        min-height: 78px;
+        padding: 13px 10px;
+      }
+
+      .stat-value {
+        font-size: 1.7rem;
+      }
+
+      .drone-grid {
+        gap: 7px;
+        padding: 9px;
+      }
+
+      .drone-card {
+        min-height: 125px;
+        padding: 10px 6px;
+      }
+
+      .drone-icon {
+        width: 74px;
+        transform: scale(0.82);
+        margin: 10px auto 3px;
+      }
+
+      .drone-card.destroyed .drone-icon {
+        transform: scale(0.82) rotate(-8deg);
+      }
+    }
+
+    /* Physical prototype view */
+    .hardware-stage.drone-grid {
+      position: relative;
+      display: block;
+      aspect-ratio: 650 / 520;
+      min-height: 650px;
+      padding: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(61, 94, 82, 0.18), transparent 31%),
+        linear-gradient(145deg, #07110e, #020504);
+      isolation: isolate;
+    }
+
+    .mdf-board {
+      position: absolute;
+      top: 3%;
+      right: 4%;
+      bottom: 3%;
+      left: 4%;
+      z-index: 1;
+      border: 2px solid #b68a55;
+      border-radius: 3px;
+      background:
+        repeating-linear-gradient(16deg, transparent 0 25px, rgba(76, 48, 25, 0.09) 26px 27px),
+        radial-gradient(circle at 24% 31%, rgba(75, 48, 25, 0.22) 0 1px, transparent 2px),
+        radial-gradient(circle at 73% 62%, rgba(75, 48, 25, 0.18) 0 1px, transparent 2px),
+        linear-gradient(135deg, #ae8657, #c39b68 52%, #987143);
+      background-size: auto, 17px 19px, 23px 29px, auto;
+      box-shadow: 0 18px 38px #000, inset 0 0 40px rgba(73, 42, 18, 0.28);
+    }
+
+    .led-zone {
+      position: absolute;
+      top: 12%;
+      bottom: 22%;
+      left: 5%;
+      z-index: 2;
+      width: 70%;
+      border: 2px solid rgba(65, 39, 19, 0.62);
+      border-radius: 3px;
+      background: rgba(255, 229, 180, 0.055);
+      box-shadow: inset 0 0 24px rgba(60, 34, 13, 0.22);
+      pointer-events: none;
+    }
+
+    .led-zone::before {
+      content: "LED FIELD / 500 × 300";
+      position: absolute;
+      top: -25px;
+      left: 0;
+      color: rgba(48, 30, 16, 0.82);
+      font: 800 0.62rem Consolas, monospace;
+      letter-spacing: 0.13em;
+    }
+
+    .led-zone::after {
+      content: "ORIGIN (0,0)";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 38px;
+      height: 38px;
+      border-top: 1px solid rgba(65, 39, 19, 0.26);
+      border-left: 1px solid rgba(65, 39, 19, 0.26);
+      color: rgba(65, 39, 19, 0.44);
+      font: 0.45rem Consolas, monospace;
+      transform: translate(-1px, -1px);
+    }
+
+    .hardware-bay {
+      display: none;
+    }
+
+    .board-label {
+      position: absolute;
+      top: 2%;
+      left: 2%;
+      z-index: 2;
+      color: rgba(50, 31, 16, 0.72);
+      font: 700 0.66rem Consolas, monospace;
+      letter-spacing: 0.15em;
+    }
+
+    .breadboard {
+      position: absolute;
+      z-index: 3;
+      width: 27%;
+      height: 12%;
+      border: 2px solid #c7c7b9;
+      border-radius: 4px;
+      background:
+        radial-gradient(circle, #48504c 0 1px, transparent 1.4px) 0 0 / 7px 7px,
+        linear-gradient(90deg, transparent 47%, #b7b7aa 48% 52%, transparent 53%),
+        #e4e4d8;
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.43);
+    }
+
+    .breadboard.top {
+      top: 13%;
+      right: 5.8%;
+      z-index: 7;
+      width: 16.5%;
+      height: 22%;
+      transform: none;
+    }
+
+    .attack-module-label {
+      position: absolute;
+      top: 9%;
+      left: 7%;
+      color: #676d69;
+      font: 700 0.49rem Consolas, monospace;
+      letter-spacing: 0.1em;
+    }
+
+    .hardware-fire {
+      position: absolute;
+      top: 32%;
+      left: 50%;
+      width: 58px;
+      height: 58px;
+      border: 6px solid #282d2b;
+      border-radius: 50%;
+      color: #fff;
+      background: radial-gradient(circle at 38% 30%, #ff7b7f, #d51f29 45%, #6e080d 75%);
+      box-shadow: 0 5px 0 #151817, 0 8px 14px rgba(0,0,0,0.65), 0 0 13px rgba(255,63,73,0.4);
+      font: 800 0.63rem Consolas, monospace;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transform: translateX(-50%);
+    }
+
+    .hardware-fire:active {
+      top: calc(32% + 3px);
+      box-shadow: 0 2px 0 #151817, 0 4px 8px rgba(0,0,0,0.65);
+    }
+
+    .hardware-fire:disabled {
+      color: #8d797a;
+      background: #4b292b;
+      box-shadow: 0 4px 0 #151817;
+      cursor: not-allowed;
+      filter: grayscale(0.65);
+    }
+
+    .hardware-fire-step {
+      position: absolute;
+      bottom: 10%;
+      left: 50%;
+      color: #7d3338;
+      font: 800 0.53rem Consolas, monospace;
+      white-space: nowrap;
+      transform: translateX(-50%);
+    }
+
+    .control-breadboard {
+      position: absolute;
+      right: auto;
+      bottom: 4%;
+      left: 22%;
+      z-index: 8;
+      width: 43%;
+      height: 15%;
+      min-height: 86px;
+      border: 2px solid #c7c7b9;
+      border-radius: 4px;
+      background:
+        radial-gradient(circle, #48504c 0 1px, transparent 1.4px) 0 0 / 7px 7px,
+        linear-gradient(0deg, transparent 46%, #bbbbae 47% 53%, transparent 54%),
+        #e4e4d8;
+      box-shadow: 0 7px 14px rgba(0, 0, 0, 0.6);
+      transform: none;
+    }
+
+    .board-screen {
+      position: absolute;
+      top: 15%;
+      left: 4%;
+      width: 48%;
+      height: 66%;
+      padding: 7px 7px;
+      border: 5px solid #26302d;
+      border-radius: 3px;
+      color: #b9e7ff;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 3px),
+        #0755a0;
+      box-shadow: inset 0 0 12px #021c42, 0 2px 4px rgba(0,0,0,0.55);
+      font: 700 clamp(0.39rem, 0.52vw, 0.58rem)/1.45 Consolas, monospace;
+      text-shadow: 0 0 5px #77d4ff;
+      white-space: nowrap;
+    }
+
+    .mini-traffic {
+      position: absolute;
+      top: 50%;
+      left: 56%;
+      display: flex;
+      gap: 5px;
+      padding: 6px;
+      border-radius: 4px;
+      background: #181d1b;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.65);
+      transform: translateY(-50%);
+    }
+
+    .mini-light {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 1px solid #505b57;
+      background: #29302e;
+      box-shadow: inset 0 0 4px #000;
+      opacity: 0.35;
+    }
+
+    .mini-light.active.safe {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      opacity: 1;
+    }
+
+    .mini-light.active.warning {
+      background: var(--yellow);
+      box-shadow: 0 0 8px var(--yellow);
+      opacity: 1;
+      animation: softPulse 0.7s infinite;
+    }
+
+    .mini-light.active.destroyed {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+      opacity: 1;
+    }
+
+    .board-nav {
+      position: absolute;
+      top: 50%;
+      right: 4%;
+      bottom: auto;
+      display: flex;
+      gap: 8px;
+      transform: translateY(-50%);
+    }
+
+    .board-nav button {
+      width: 34px;
+      height: 27px;
+      border: 2px solid #222a28;
+      border-radius: 4px;
+      color: #eef5f2;
+      background: linear-gradient(#414b48, #171c1a);
+      box-shadow: 0 3px 0 #070908;
+      font: 800 0.8rem Consolas, monospace;
+      cursor: pointer;
+    }
+
+    .board-nav button:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #070908;
+    }
+
+    .arduino {
+      position: absolute;
+      z-index: 5;
+      width: 18%;
+      min-width: 105px;
+      aspect-ratio: 1.55;
+      border: 2px solid #244b67;
+      border-radius: 5px;
+      color: #c7eafb;
+      background:
+        radial-gradient(circle at 18% 22%, #d4d7c9 0 3px, transparent 4px),
+        radial-gradient(circle at 82% 78%, #d4d7c9 0 3px, transparent 4px),
+        linear-gradient(90deg, #171b1e 0 7%, transparent 7% 93%, #171b1e 93%),
+        #176c96;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.7), inset 0 0 0 2px rgba(100, 196, 232, 0.18);
+    }
+
+    .arduino::before {
+      content: "";
+      position: absolute;
+      top: 24%;
+      left: 32%;
+      width: 35%;
+      height: 34%;
+      border: 2px solid #1a2224;
+      background: repeating-linear-gradient(90deg, #1a2224 0 3px, #526065 3px 5px);
+      box-shadow: 0 0 0 3px rgba(192, 208, 207, 0.25);
+    }
+
+    .arduino::after {
+      content: "";
+      position: absolute;
+      right: -8%;
+      top: 31%;
+      width: 14%;
+      height: 34%;
+      border: 2px solid #6a7070;
+      background: #c8cbca;
+    }
+
+    .arduino.top-right {
+      top: 38%;
+      right: 6%;
+      z-index: 6;
+      width: 15%;
+      transform: rotate(90deg);
+    }
+
+    .arduino.bottom-left {
+      right: auto;
+      bottom: 5.5%;
+      left: 6%;
+      z-index: 9;
+      width: 16%;
+      transform: rotate(-2deg);
+    }
+
+    .arduino-name {
+      position: absolute;
+      left: 9%;
+      bottom: 8%;
+      font: 700 0.55rem Consolas, monospace;
+      letter-spacing: 0.08em;
+      text-shadow: 0 1px #06324b;
+    }
+
+    .arduino-led {
+      position: absolute;
+      top: 10%;
+      right: 13%;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #a6ff3d;
+      box-shadow: 0 0 8px #a6ff3d;
+      animation: softPulse 1.2s infinite;
+    }
+
+    .hardware-stage .drone-card {
+      --x: 50%;
+      --y: 50%;
+      position: absolute;
+      top: var(--y);
+      left: var(--x);
+      z-index: 6;
+      width: 66px;
+      min-height: 0;
+      height: 96px;
+      padding: 0;
+      border: 0;
+      color: var(--green);
+      background: transparent;
+      transform: translate(-50%, -50%);
+      box-shadow: none;
+      overflow: visible;
+    }
+
+    .hardware-stage .drone-card:hover,
+    .hardware-stage .drone-card.selected {
+      transform: translate(-50%, -53%) scale(1.05);
+      border: 0;
+      box-shadow: none;
+    }
+
+    .hardware-stage .drone-card::before {
+      top: auto;
+      bottom: 0;
+      left: 50%;
+      width: 34px;
+      height: 12px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(238, 235, 218, 0.72);
+      box-shadow: 0 4px 7px rgba(43, 24, 10, 0.55);
+      transform: translateX(-50%);
+    }
+
+    .hardware-stage .drone-card::after {
+      right: auto;
+      bottom: 8px;
+      left: 50%;
+      width: 5px;
+      height: 56px;
+      border: 0;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #59442d, #a47c4d 45%, #49341f);
+      box-shadow: 2px 0 2px rgba(0, 0, 0, 0.45);
+      transform: translateX(-50%);
+    }
+
+    .led-bulb {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      z-index: 2;
+      width: 22px;
+      height: 27px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 11px 11px 6px 6px;
+      background: rgba(72, 83, 78, 0.38);
+      box-shadow: inset 4px 3px 6px rgba(255, 255, 255, 0.2), inset -3px -4px 7px rgba(0, 0, 0, 0.55);
+      transform: translateX(-50%);
+    }
+
+    .led-bulb::after {
+      content: "";
+      position: absolute;
+      top: -3px;
+      left: 7px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .unit-tag {
+      position: absolute;
+      top: -11px;
+      left: 50%;
+      z-index: 4;
+      min-width: 58px;
+      padding: 3px 5px;
+      border: 1px solid currentColor;
+      color: currentColor;
+      background: rgba(3, 8, 7, 0.9);
+      font: 700 0.58rem Consolas, monospace;
+      text-align: center;
+      letter-spacing: 0.08em;
+      transform: translateX(-50%);
+    }
+
+    .hardware-stage .drone-state {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      z-index: 4;
+      padding: 2px 4px;
+      color: #07100d;
+      background: currentColor;
+      font-size: 0.47rem;
+      letter-spacing: 0.05em;
+      transform: translateX(-50%);
+    }
+
+    .hardware-stage .drone-card.warning {
+      border: 0;
+      background: transparent;
+      animation: none;
+    }
+
+    .hardware-stage .drone-card.warning .led-bulb {
+      animation: none;
+    }
+
+    .hardware-stage .drone-card.destroyed {
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .hardware-stage .drone-card.destroyed::before {
+      top: 50%;
+      bottom: auto;
+      left: 50%;
+      z-index: -1;
+      width: 235px;
+      height: 235px;
+      border: 2px solid rgba(255, 63, 73, 0.85);
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(255, 63, 73, 0.08) 0 36%,
+        rgba(255, 63, 73, 0.28) 37% 40%,
+        rgba(255, 63, 73, 0.06) 41% 67%,
+        rgba(255, 63, 73, 0.72) 68% 70%,
+        transparent 71%
+      );
+      box-shadow: 0 0 22px rgba(255, 63, 73, 0.35), inset 0 0 18px rgba(255, 63, 73, 0.18);
+      transform: translate(-50%, -50%);
+      animation: attackRangePulse 1.5s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .hardware-stage .drone-card.destroyed .led-bulb {
+      background: var(--red);
+      box-shadow: 0 0 13px var(--red), 0 0 34px var(--red), inset 4px 3px 6px rgba(255, 255, 255, 0.38);
+      animation: destroyedPulse 1s infinite;
+    }
+
+    .hardware-stage .drone-card.selected .unit-tag {
+      color: #fff;
+      background: currentColor;
+      box-shadow: 0 0 13px currentColor;
+    }
+
+    .hardware-stage .drone-card.selected .unit-tag span {
+      color: #08100e;
+    }
+
+    /* 500x300 board coordinates: origin at center, positive Y points upward. */
+    .hardware-stage .drone-card[data-id="1"] { --x: 9.80%; --y: 36.40%; }
+    .hardware-stage .drone-card[data-id="2"] { --x: 11.00%; --y: 67.50%; }
+    .hardware-stage .drone-card[data-id="3"] { --x: 27.40%; --y: 17.40%; }
+    .hardware-stage .drone-card[data-id="4"] { --x: 26.70%; --y: 43.20%; }
+    .hardware-stage .drone-card[data-id="5"] { --x: 33.80%; --y: 64.60%; }
+    .hardware-stage .drone-card[data-id="6"] { --x: 42.10%; --y: 27.60%; }
+    .hardware-stage .drone-card[data-id="7"] { --x: 48.10%; --y: 55.97%; }
+    .hardware-stage .drone-card[data-id="8"] { --x: 57.50%; --y: 19.67%; }
+    .hardware-stage .drone-card[data-id="9"] { --x: 66.00%; --y: 39.80%; }
+
+    @keyframes ledWarning {
+      0%, 42% { opacity: 1; filter: brightness(1.2); }
+      43%, 100% { opacity: 0.25; filter: brightness(0.45); }
+    }
+
+    @keyframes destroyedPulse {
+      50% { filter: brightness(1.45); transform: translateX(-50%) scale(1.08); }
+    }
+
+    @keyframes attackRangePulse {
+      0%, 100% { opacity: 0.72; transform: translate(-50%, -50%) scale(0.98); }
+      50% { opacity: 0.92; transform: translate(-50%, -50%) scale(1.02); }
+    }
+
+    @media (max-width: 690px) {
+      .hardware-stage.drone-grid {
+        min-height: 780px;
+        aspect-ratio: 0.78;
+      }
+
+      .mdf-board {
+        top: 5%;
+        bottom: 38%;
+        left: 5%;
+        width: 90%;
+      }
+
+      .arduino {
+        min-width: 88px;
+      }
+
+      .breadboard.top {
+        top: 69%;
+        right: 68%;
+        width: 25%;
+        height: 25%;
+      }
+
+      .arduino.top-right {
+        top: 72%;
+        right: 48%;
+        width: 22%;
+      }
+
+      .arduino.bottom-left {
+        right: auto;
+        bottom: 2%;
+        left: 7%;
+        width: 24%;
+        transform: rotate(-2deg);
+      }
+
+      .control-breadboard {
+        right: auto;
+        bottom: 2%;
+        left: 29%;
+        width: 64%;
+        height: 14%;
+        min-height: 86px;
+      }
+
+      .board-screen {
+        width: 47%;
+      }
+
+      .hardware-stage .drone-card[data-id="1"] { --x: 10.60%; --y: 22.10%; }
+      .hardware-stage .drone-card[data-id="2"] { --x: 12.00%; --y: 46.10%; }
+      .hardware-stage .drone-card[data-id="3"] { --x: 33.80%; --y: 7.85%; }
+      .hardware-stage .drone-card[data-id="4"] { --x: 32.90%; --y: 27.80%; }
+      .hardware-stage .drone-card[data-id="5"] { --x: 42.60%; --y: 43.75%; }
+      .hardware-stage .drone-card[data-id="6"] { --x: 52.70%; --y: 16.40%; }
+      .hardware-stage .drone-card[data-id="7"] { --x: 59.70%; --y: 38.05%; }
+      .hardware-stage .drone-card[data-id="8"] { --x: 72.50%; --y: 9.75%; }
+      .hardware-stage .drone-card[data-id="9"] { --x: 84.00%; --y: 24.95%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ARDUINO AIR DEFENSE NETWORK</p>
+        <h1>DRONE DEFENSE CONTROL</h1>
+      </div>
+      <div class="system-status">
+        <span class="pulse"></span>
+        SYSTEM ONLINE / SECTOR 09
+      </div>
+    </header>
+
+    <section class="stats" aria-label="드론 현황">
+      <div class="stat alive">
+        <span class="stat-label">ALIVE UNITS</span>
+        <span class="stat-value" id="aliveCount">9</span>
+      </div>
+      <div class="stat warning">
+        <span class="stat-label">WARNING</span>
+        <span class="stat-value" id="warningCount">0</span>
+      </div>
+      <div class="stat destroyed">
+        <span class="stat-label">DESTROYED</span>
+        <span class="stat-value" id="destroyedCount">0</span>
+      </div>
+    </section>
+
+    <main class="main-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <span class="panel-title">PHYSICAL DEFENSE BOARD / LED ARRAY</span>
+          <span class="coordinates">ARDUINO LINKED</span>
+        </div>
+        <div class="drone-grid hardware-stage" id="droneGrid"></div>
+      </section>
+
+      <aside class="panel side-panel">
+        <div class="panel-header">
+          <span class="panel-title">TARGET INSPECTION</span>
+          <span class="coordinates">LIVE</span>
+        </div>
+        <div class="target-content">
+          <div class="selected-meta">
+            <div class="selected-kicker">SELECTED UNIT</div>
+            <div class="selected-name" id="selectedName">DRONE 01</div>
+          </div>
+
+          <div class="traffic-wrap">
+            <div class="traffic-light" aria-label="선택 드론 상태 신호등">
+              <span class="light red" id="redLight"></span>
+              <span class="light yellow" id="yellowLight"></span>
+              <span class="light green active" id="greenLight"></span>
+            </div>
+            <div class="signal-info">
+              <strong id="selectedState">SAFE</strong>
+              <span>UNIT STATUS SIGNAL</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="fire-btn" id="fireButton" type="button">FIRE [01/06]</button>
+            <button class="reset-btn" id="resetButton" type="button">RESET</button>
+          </div>
+
+          <div class="progress-label">
+            <span>ATTACK SEQUENCE</span>
+            <span id="sequenceLabel">0 / 6</span>
+          </div>
+          <div class="progress-track" id="progressTrack" aria-hidden="true"></div>
+
+          <div class="log" id="eventLog" aria-live="polite">
+            <div class="log-entry">Defense network initialized.</div>
+            <div class="log-entry">Nine aerial units connected.</div>
+            <div class="log-entry">Awaiting FIRE command...</div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="assertive"></div>
+
+  <script>
+    const attackSequence = [
+      { destroyed: [1], warning: [3, 4] },
+      { destroyed: [4], warning: [5, 6] },
+      { destroyed: [3], warning: [] },
+      { destroyed: [6], warning: [7, 8] },
+      { destroyed: [8], warning: [9] },
+      { destroyed: [9], warning: [] }
+    ];
+
+    let drones = Array.from({ length: 9 }, (_, index) => ({
+      id: index + 1,
+      status: "SAFE"
+    }));
+    let fireStep = 0;
+    let selectedDroneId = 1;
+
+    const grid = document.getElementById("droneGrid");
+    const fireButton = document.getElementById("fireButton");
+    const resetButton = document.getElementById("resetButton");
+    const eventLog = document.getElementById("eventLog");
+    const toastContainer = document.getElementById("toastContainer");
+    const progressTrack = document.getElementById("progressTrack");
+
+    function renderGrid() {
+      const hardware = `
+        <div class="mdf-board" aria-hidden="true">
+          <span class="board-label">PHYSICAL BASE / 650 × 450</span>
+        </div>
+        <div class="led-zone" aria-hidden="true"></div>
+        <div class="hardware-bay" aria-hidden="true"></div>
+        <div class="breadboard top" aria-label="드론 공격 버튼이 설치된 빵판">
+          <span class="attack-module-label">ATTACK MODULE</span>
+          <button class="hardware-fire" id="hardwareFireButton" data-hardware-fire type="button">FIRE</button>
+          <span class="hardware-fire-step" id="hardwareFireStep">READY 01/06</span>
+        </div>
+        <div class="arduino top-right" aria-label="우측 상단 Arduino 컨트롤러">
+          <span class="arduino-led"></span>
+          <span class="arduino-name">ARDUINO<br>CONTROL A</span>
+        </div>
+        <div class="arduino bottom-left" aria-label="좌측 하단 Arduino 컨트롤러">
+          <span class="arduino-led"></span>
+          <span class="arduino-name">ARDUINO<br>RECEIVER</span>
+        </div>
+        <div class="control-breadboard" aria-label="LCD와 신호등 LED 및 선택 버튼이 설치된 빵판">
+          <div class="board-screen">
+            <div id="boardScreenLine1">ALIVE:9 DEST:0</div>
+            <div id="boardScreenLine2">SELECT LED 01</div>
+          </div>
+          <div class="mini-traffic" aria-label="선택 LED 상태 신호등">
+            <span class="mini-light destroyed" id="miniRed"></span>
+            <span class="mini-light warning" id="miniYellow"></span>
+            <span class="mini-light safe active" id="miniGreen"></span>
+          </div>
+          <div class="board-nav">
+            <button type="button" data-select-step="-1" aria-label="이전 LED 선택">◀</button>
+            <button type="button" data-select-step="1" aria-label="다음 LED 선택">▶</button>
+          </div>
+        </div>
+      `;
+
+      const units = drones.map((drone) => `
+        <article
+          class="drone-card ${drone.status.toLowerCase()} ${drone.id === selectedDroneId ? "selected" : ""}"
+          data-id="${drone.id}"
+          tabindex="0"
+          role="button"
+          aria-label="드론 ${drone.id}, 상태 ${drone.status}"
+        >
+          <div class="unit-tag"><span>LED ${String(drone.id).padStart(2, "0")}</span></div>
+          <span class="led-bulb" aria-hidden="true"></span>
+          <div class="drone-state">${drone.status}</div>
+        </article>
+      `).join("");
+
+      grid.innerHTML = hardware + units;
+    }
+
+    function renderStats() {
+      const destroyed = drones.filter((drone) => drone.status === "DESTROYED").length;
+      const warning = drones.filter((drone) => drone.status === "WARNING").length;
+      document.getElementById("aliveCount").textContent = 9 - destroyed;
+      document.getElementById("warningCount").textContent = warning;
+      document.getElementById("destroyedCount").textContent = destroyed;
+    }
+
+    function renderSelection() {
+      const selected = drones.find((drone) => drone.id === selectedDroneId);
+      document.getElementById("selectedName").textContent =
+        `DRONE ${String(selected.id).padStart(2, "0")}`;
+      document.getElementById("selectedState").textContent = selected.status;
+
+      const lightMap = {
+        SAFE: "greenLight",
+        WARNING: "yellowLight",
+        DESTROYED: "redLight"
+      };
+
+      ["redLight", "yellowLight", "greenLight"].forEach((id) => {
+        document.getElementById(id).classList.toggle("active", id === lightMap[selected.status]);
+      });
+
+      const statusColors = {
+        SAFE: "var(--green)",
+        WARNING: "var(--yellow)",
+        DESTROYED: "var(--red)"
+      };
+      document.getElementById("selectedState").style.color = statusColors[selected.status];
+
+      const destroyed = drones.filter((drone) => drone.status === "DESTROYED").length;
+      const boardLine1 = document.getElementById("boardScreenLine1");
+      const boardLine2 = document.getElementById("boardScreenLine2");
+      if (boardLine1 && boardLine2) {
+        boardLine1.textContent = `ALIVE:${9 - destroyed} DEST:${destroyed}`;
+        boardLine2.textContent =
+          `LED ${String(selected.id).padStart(2, "0")} ${selected.status}`;
+      }
+
+      const miniLightMap = {
+        SAFE: "miniGreen",
+        WARNING: "miniYellow",
+        DESTROYED: "miniRed"
+      };
+      ["miniRed", "miniYellow", "miniGreen"].forEach((id) => {
+        const light = document.getElementById(id);
+        if (light) light.classList.toggle("active", id === miniLightMap[selected.status]);
+      });
+    }
+
+    function renderProgress() {
+      progressTrack.innerHTML = attackSequence.map((_, index) =>
+        `<span class="progress-step ${index < fireStep ? "done" : ""}"></span>`
+      ).join("");
+      document.getElementById("sequenceLabel").textContent = `${fireStep} / 6`;
+
+      if (fireStep < attackSequence.length) {
+        fireButton.textContent = `FIRE [${String(fireStep + 1).padStart(2, "0")}/06]`;
+        fireButton.disabled = false;
+      } else {
+        fireButton.textContent = "SEQUENCE COMPLETE";
+        fireButton.disabled = true;
+      }
+
+      const hardwareFireButton = document.getElementById("hardwareFireButton");
+      const hardwareFireStep = document.getElementById("hardwareFireStep");
+      if (hardwareFireButton && hardwareFireStep) {
+        const sequenceComplete = fireStep >= attackSequence.length;
+        hardwareFireButton.disabled = sequenceComplete;
+        hardwareFireButton.textContent = sequenceComplete ? "DONE" : "FIRE";
+        hardwareFireStep.textContent = sequenceComplete
+          ? "SEQUENCE COMPLETE"
+          : `READY ${String(fireStep + 1).padStart(2, "0")}/06`;
+      }
+    }
+
+    function renderAll() {
+      renderGrid();
+      renderStats();
+      renderSelection();
+      renderProgress();
+    }
+
+    function appendLog(message, isAlert = false) {
+      const entry = document.createElement("div");
+      entry.className = `log-entry${isAlert ? " alert" : ""}`;
+      entry.textContent = message;
+      eventLog.appendChild(entry);
+      eventLog.scrollTop = eventLog.scrollHeight;
+    }
+
+    function showDestroyedAlert(droneId) {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.textContent = `⚠ Drone ${droneId} DESTROYED!`;
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.remove(), 3100);
+    }
+
+    function executeAttack() {
+      if (fireStep >= attackSequence.length) return;
+
+      const action = attackSequence[fireStep];
+      const commandNumber = fireStep + 1;
+      appendLog(`FIRE command ${String(commandNumber).padStart(2, "0")} executed.`);
+
+      action.destroyed.forEach((id) => {
+        drones[id - 1].status = "DESTROYED";
+        appendLog(`Drone ${id} signal lost. Unit DESTROYED.`, true);
+        showDestroyedAlert(id);
+      });
+
+      action.warning.forEach((id) => {
+        if (drones[id - 1].status !== "DESTROYED") {
+          drones[id - 1].status = "WARNING";
+          appendLog(`Drone ${id} entered WARNING state.`);
+        }
+      });
+
+      fireStep += 1;
+      renderAll();
+
+      if (fireStep === attackSequence.length) {
+        appendLog("Attack sequence complete. System holding.");
+      }
+    }
+
+    function selectDrone(id) {
+      selectedDroneId = id;
+      renderGrid();
+      renderSelection();
+      appendLog(`Drone ${id} selected for inspection.`);
+    }
+
+    function moveSelection(step) {
+      const nextIndex = (selectedDroneId - 1 + step + drones.length) % drones.length;
+      selectDrone(nextIndex + 1);
+    }
+
+    function resetSimulation() {
+      drones = Array.from({ length: 9 }, (_, index) => ({
+        id: index + 1,
+        status: "SAFE"
+      }));
+      fireStep = 0;
+      selectedDroneId = 1;
+      eventLog.innerHTML = "";
+      appendLog("Simulation reset.");
+      appendLog("All nine units restored to SAFE.");
+      appendLog("Awaiting FIRE command...");
+      renderAll();
+    }
+
+    grid.addEventListener("click", (event) => {
+      if (event.target.closest("[data-hardware-fire]")) {
+        executeAttack();
+        return;
+      }
+
+      const navigationButton = event.target.closest("[data-select-step]");
+      if (navigationButton) {
+        moveSelection(Number(navigationButton.dataset.selectStep));
+        return;
+      }
+
+      const card = event.target.closest(".drone-card");
+      if (card) selectDrone(Number(card.dataset.id));
+    });
+
+    grid.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const card = event.target.closest(".drone-card");
+      if (card) {
+        event.preventDefault();
+        selectDrone(Number(card.dataset.id));
+      }
+    });
+
+    fireButton.addEventListener("click", executeAttack);
+    resetButton.addEventListener("click", resetSimulation);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") moveSelection(-1);
+      if (event.key === "ArrowRight") moveSelection(1);
+    });
+
+    renderAll();
+  </script>
+</body>
+</html>
